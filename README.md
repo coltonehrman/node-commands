@@ -1,1 +1,0 @@
-Website : https://js-command.freedomains.dev/commands
