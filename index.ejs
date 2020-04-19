@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Commands</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@800&display=swap" rel="stylesheet">
+
+    <style>
+        html {
+            background: #111;
+            padding: 1em;
+            color: #eee;
+            font-size: 16px;
+            line-height: 1;
+            letter-spacing: 0.125em;
+            font-family: 'Oxanium';
+        }
+
+        h2 {
+            margin: 0;
+        }
+
+        .retro {
+            text-shadow: 0.06rem 0 0.06rem #75fa69;
+        }
+
+        .blink {
+            animation-duration: 1.5s;
+            animation-name: bgblink;
+            animation-iteration-count: infinite;
+            animation-direction: alternate;
+        }
+
+        @keyframes bgblink {
+            0%     {    background-color: #fff;       }
+            50%    {    background-color: transparent;  }
+            100%   {    background-color: #fff;       }
+        }
+
+        body {
+            height: 100%;
+            margin: 0;
+        }
+
+        h1 {
+            font-size: 5em;
+        }
+
+        .console {
+            text-shadow: none;
+        }
+        
+        .prompt {
+            display: flex;
+            margin: 15px 0;
+            align-items: center;
+        }
+
+        .command-prompt {
+            color: #75fa69;
+            margin-right: 10px;
+        }
+
+        .cursor {
+            height: 16px;
+            width: 12px;
+            background-color: #fff;
+            font-size: 1.2rem;
+        }
+
+        .stdout {
+            color: white;
+        }
+
+        .stderr {
+            color: maroon;
+        }
+
+        pre {
+            font-family: 'Oxanium';
+            line-height: 1.25;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 class="retro">EXECUTE SERVER COMMANDS</h2>
+        <h5 class="retro">Type "?" for help</h5>
+        <div class="console retro">
+            <div class="prompt">
+                <div class="command-prompt">$&gt;</div>
+                <div class="command-input"></div>
+                <div class="cursor blink"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (() => {
+            const $ = document.querySelector.bind(document)
+
+            window.onload = () => {
+                const $console = $('.console')
+                let $commandInput = $('.command-input')
+                let waiting = false
+
+                const createElement = (html) => {
+                    const div = document.createElement('div')
+                    div.innerHTML = html.trim()
+                    return div.firstChild
+                }
+
+                const makeNewPrompt = () => {
+                    const $cursor = $console.querySelector('.cursor')
+                    $cursor.parentNode.removeChild($cursor)
+
+                    const el = createElement(`
+                        <div class="prompt">
+                            <div class="inline command-prompt">$&gt;</div>
+                            <div class="inline command-input"></div>
+                            <div class="inline cursor blink"></div>
+                        </div>
+                    `)
+
+                    $commandInput = el.querySelector('.command-input')
+                    $console.appendChild(el)
+
+                    window.scrollTo(0, document.body.scrollHeight);
+                }
+
+                const appendDataToConsole = (data, type) => {
+                    let className = ''
+
+                    const el = createElement(`
+                        <pre class="${type}">${data}</pre>
+                    `)
+
+                    $console.appendChild(el)
+                }
+
+                const showHelpMenu = () => {
+                    let MENU = "COMMANDS\n-------------\nls\ncat\nwc\nclear"
+                    appendDataToConsole(MENU.trim(), 'stdout')
+                }
+
+                const clearConsole = () => {
+                    const $console = $('.console')
+                    const children = $console.children
+                    const $lastPrompt = children[children.length - 1]
+                    $console.innerHTML = $lastPrompt.outerHTML
+                    $commandInput = $('.command-input')
+                }
+
+                const handleSubmit = async () => {
+                    const input = $commandInput.innerText
+
+                    // check if user needs help
+                    if (input.trim() === '?') {
+                        showHelpMenu()
+                        makeNewPrompt()
+                    }
+                    // check if user is clearing console
+                    else if (input.trim() === 'clear') {
+                        makeNewPrompt()
+                        clearConsole()
+                    }
+                    // check if something was input by user
+                    else if (input.trim().length > 0) {
+                        const postBody = {
+                            command: input
+                        }
+
+                        waiting = true
+
+                        // send input to POST /exec route
+                        const res = await fetch('/exec', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(postBody)
+                        }).then(res => res.json())
+
+                        waiting = false
+
+                        const json = JSON.parse(res)
+
+                        console.log(json)
+
+                        if (json.stderr) {
+                            appendDataToConsole(json.stderr, 'stderr')
+                        }
+                        if (json.stdout) {
+                            appendDataToConsole(json.stdout, 'stdout')
+                        }
+
+                        makeNewPrompt()
+                    }
+                }
+
+                const type = (e) => {
+                    if (e.key === 'Backspace' || e.code === 'Backspace' || e.keyCode === 8 || e.which === 8)
+                        $commandInput.innerText = $commandInput.innerText.slice(0, -1)
+                    if (e.key.length === 1)
+                        $commandInput.innerHTML += (e.key === ' ') ? `&nbsp;` : e.key
+                }
+
+                document.addEventListener('keydown', (e) => {
+                    if (!waiting) {
+                        if (e.code === 'Enter' || e.key === 'Enter' || e.keyCode === 13)
+                            handleSubmit()
+                        else
+                            type(e)
+                    }
+                })
+            }
+        })()
+    </script>
+</body>
+</html>
